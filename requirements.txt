@@ -1,0 +1,6 @@
+# Initial dependency plan; versions are pinned after the technology spike.
+cryptography
+pytest
+pytest-asyncio
+pyside6
+# ML-KEM provider will be selected and pinned after a compatibility check.

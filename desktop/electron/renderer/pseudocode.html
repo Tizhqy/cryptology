@@ -1,0 +1,11 @@
+<!-- PSEUDOCODE: UI only. Crypto and TCP do not live in renderer. -->
+<form id="message-form">
+  <select id="security-mode"><option>secure</option><option>insecure</option></select>
+  <select id="key-exchange"><option>rsa-oaep</option><option>dh-2048</option><option>ecdh</option><option>ml-kem-768</option></select>
+  <textarea id="message"></textarea>
+  <button type="submit">Send</button>
+</form>
+<script>
+  // Form, IPC ile Python application use-case'ini cagirir.
+  // Burada AES, RSA, DH veya socket kodu yazilmaz.
+</script>

@@ -1,12 +1,12 @@
 {
-  "security": {
-    "mode": "insecure",
-    "key_exchange": "none",
-    "data_encryption": {
-      "algorithm": "none",
-      "mode": "none",
-      "implementation": "none"
-    },
-    "manual_aes_enabled": false
-  }
+    "security": {
+        "mode": "insecure",
+        "key_exchange": "none",
+        "data_encryption": {
+            "algorithm": "none",
+            "mode": "none",
+            "implementation": "none"
+        },
+        "manual_aes_enabled": false
+    }
 }

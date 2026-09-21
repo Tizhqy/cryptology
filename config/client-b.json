@@ -1,33 +1,35 @@
 {
-  "application": {
-    "name": "cryptology-client",
-    "environment": "development",
-    "log_level": "INFO"
-  },
-  "node": {
-    "role": "client",
-    "client_id": "client-b",
-    "server_host": "127.0.0.1",
-    "server_port": 5050
-  },
-  "security": {
-    "mode": "secure",
-    "key_exchange": "ecdh",
-    "data_encryption": {
-      "algorithm": "AES-128",
-      "mode": "GCM",
-      "implementation": "library"
+    "application": {
+        "name": "cryptology-client",
+        "environment": "development",
+        "log_level": "INFO"
     },
-    "manual_aes_enabled": false
-  },
-  "transfer": {
-    "max_file_size_bytes": 5242880,
-    "chunk_size_bytes": 4096,
-    "allowed_extensions": [".pdf"]
-  },
-  "measurement": {
-    "enabled": true,
-    "repeat_count": 15,
-    "output_directory": "artifacts/measurements"
-  }
+    "node": {
+        "role": "client",
+        "client_id": "client-b",
+        "server_host": "127.0.0.1",
+        "server_port": 5050
+    },
+    "security": {
+        "mode": "secure",
+        "key_exchange": "ecdh",
+        "data_encryption": {
+            "algorithm": "AES-128",
+            "mode": "GCM",
+            "implementation": "library"
+        },
+        "manual_aes_enabled": false
+    },
+    "transfer": {
+        "max_file_size_bytes": 5242880,
+        "chunk_size_bytes": 4096,
+        "allowed_extensions": [
+            ".pdf"
+        ]
+    },
+    "measurement": {
+        "enabled": true,
+        "repeat_count": 15,
+        "output_directory": "artifacts/measurements"
+    }
 }

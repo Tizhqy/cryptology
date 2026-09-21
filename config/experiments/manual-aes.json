@@ -1,22 +1,22 @@
 {
-  "application": {
-    "name": "manual-aes-experiment",
-    "environment": "experiment",
-    "log_level": "INFO"
-  },
-  "security": {
-    "mode": "experiment",
-    "key_exchange": "none",
-    "data_encryption": {
-      "algorithm": "AES-128",
-      "mode": "single-block",
-      "implementation": "manual"
+    "application": {
+        "name": "manual-aes-experiment",
+        "environment": "experiment",
+        "log_level": "INFO"
     },
-    "manual_aes_enabled": true
-  },
-  "measurement": {
-    "enabled": true,
-    "repeat_count": 15,
-    "output_directory": "artifacts/measurements"
-  }
+    "security": {
+        "mode": "experiment",
+        "key_exchange": "none",
+        "data_encryption": {
+            "algorithm": "AES-128",
+            "mode": "single-block",
+            "implementation": "manual"
+        },
+        "manual_aes_enabled": true
+    },
+    "measurement": {
+        "enabled": true,
+        "repeat_count": 15,
+        "output_directory": "artifacts/measurements"
+    }
 }

@@ -1,12 +1,12 @@
 {
-  "security": {
-    "mode": "secure",
-    "key_exchange": "dh-2048",
-    "data_encryption": {
-      "algorithm": "AES-128",
-      "mode": "GCM",
-      "implementation": "library"
-    },
-    "manual_aes_enabled": false
-  }
+    "security": {
+        "mode": "secure",
+        "key_exchange": "dh-2048",
+        "data_encryption": {
+            "algorithm": "AES-128",
+            "mode": "GCM",
+            "implementation": "library"
+        },
+        "manual_aes_enabled": false
+    }
 }

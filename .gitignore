@@ -1,0 +1,53 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# .NET / C#
+bin/
+obj/
+.vs/
+TestResults/
+*.user
+*.suo
+
+# Node and general build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Runtime and experiment output
+logs/
+artifacts/
+*.log
+*.pcap
+*.pcapng
+*.dump
+
+# Generated documentation and reports
+reports/

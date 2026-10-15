@@ -3,12 +3,10 @@ name = "cryptology-security-lab"
 version = "0.1.0"
 description = "Educational secure communication and cryptology laboratory"
 requires-python = ">=3.11"
-dependencies = [
-    "cryptography",
-    "pytest",
-    "pytest-asyncio",
-    "pyside6",
-]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8.0,<9.0"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

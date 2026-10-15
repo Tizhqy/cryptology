@@ -44,6 +44,8 @@ coverage/
 # Runtime and experiment output
 logs/
 artifacts/
+received/
+downloads/
 *.log
 *.pcap
 *.pcapng

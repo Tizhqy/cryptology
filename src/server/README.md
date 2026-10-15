@@ -1,6 +1,6 @@
 # Server
 
-Sunucu uygulamasi burada yer alir. Iki client baglantisini kabul eder, gelen text/PDF frame'lerini gonderen client key'i ile acar, plaintext'i konsola basar ve hedef client key'iyle yeniden sifreleyerek iletir.
+`main.py` su an insecure milestone'u calistirir: iki client baglantisini kabul eder, plaintext text/PDF frame'lerini Client A ile Client B arasinda aktarir. Text'i konsola basar, PDF'yi `received/` altina kaydeder. Encryption ve key exchange sonraki milestone'lardir.
 
 Planlanan alt sinirlar:
 
@@ -10,4 +10,4 @@ Planlanan alt sinirlar:
 - `infrastructure`: Storage, crypto, network ve dis adapter'lar
 - `observability`: Log, audit, metric ve trace
 
-Ilk giris noktasi TCP server'dir. Framework veya HTTP bridge daha sonra eklenebilir; application use-case'leri bu secime bagli olmamalidir.
+Calistirma: `python src/server/main.py --config config/server.json --mode insecure`

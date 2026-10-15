@@ -6,7 +6,7 @@ Proje bir sunucu ve ayni client uygulamasinin iki instance'i ile calisir. Client
 
 ## Durum
 
-Bu depo Python merkezli taslak asamasindadir. Once CLI akisi ve core use-case'ler kurulacak, daha sonra ayni use-case'leri cagiran Electron arayuzu eklenecektir. Rust veya C++ ilk kapsamda yoktur; ancak ileride performans ihtiyaci olursa infrastructure adapter'i olarak eklenebilir.
+Ilk calisan milestone tamamlandi: insecure TCP modunda Client A -> Server -> Client B plaintext mesaj ve PDF aktarimi yapabiliyor. Server plaintext mesaji konsola basar, PDF'yi `received/` altina kaydeder ve Client B'ye aktarir. AES, key exchange, manuel AES ve Electron henuz uygulanmadi.
 
 ## Mimari ilkeler
 
@@ -34,20 +34,46 @@ Bu depo Python merkezli taslak asamasindadir. Once CLI akisi ve core use-case'le
 - `docs`: Mimari kararlar, tehdit modeli ve deney notlari.
 - `scripts`: Tekrarlanabilir gelistirme ve kontrol komutlari.
 
-## Baslangic
+## Baslangic (Windows)
 
-Ilk teknik adim Python ile CLI server/client akisini kurmaktir. Ornek config'ler `config/` altindadir. Uygulama kodu eklendiginde kurulum komutlari ve Electron gelistirme komutlari bu README'ye eklenecektir.
+Python 3.11 veya ustunu kullanin. Ilk milestone runtime icin harici paket gerektirmez. Test icin `python -m pip install -r requirements.txt` calistirin.
+
+1. Terminal 1'de sunucuyu baslatin:
+
+```powershell
+python src/server/main.py --config config/server.json --mode insecure
+```
+
+2. Terminal 2'de Client B'yi baslatin:
+
+```powershell
+python src/clients/client-app/main.py --config config/client-b.json --mode insecure
+```
+
+3. Terminal 3'te Client A'yi baslatin:
+
+```powershell
+python src/clients/client-app/main.py --config config/client-a.json --mode insecure
+```
+
+Client A'da normal yazi mesaj gonderir. PDF icin `/file "C:\\path\\sample.pdf"`, cikmak icin `/quit` yazin. Client B gelen mesaji ve dosyayi alir. Server'in durdugu bilgisayarda `received/`, Client B'de `downloads/` olusur.
+
+Iki farkli bilgisayarda calistirirken `client-a.json` ve `client-b.json` icindeki `server_host` degerini Server bilgisayarinin LAN IP adresi yapin; TCP 5050 icin yerel firewall izni gerekebilir. Ilk Wireshark denemelerini yalnizca kendi bilgisayarlarinizda ve sentetik veriyle yapin.
+
+## Test
+
+```powershell
+python -m pytest tests/integration/test_insecure_relay.py -q
+```
 
 ## Uygulama sirasi
 
-1. TCP framing ve server relay pseudocode'unu gercek Python koduna cevir.
-2. Tek client'i Client A/B config'leriyle calistir.
-3. Guvensiz text ve PDF chunk transferini tamamla.
-4. Kutuphaneli AES-128-GCM ekle.
-5. RSA-OAEP, DH, ECDH ve ML-KEM provider'larini ayni interface arkasina bagla.
-6. Manuel AES-128 tek blok deneyini test vektorleriyle dogrula.
-7. 10-15 tekrar olcumlerini JSON/CSV yaz.
-8. CLI use-case'lerini degistirmeden Electron UI ekle.
+1. Insecure text ve PDF akisinin hata durumlarini ve Wireshark capture'ini tamamla.
+2. Kutuphaneli AES-128-GCM ekle.
+3. RSA-OAEP, DH, ECDH ve ML-KEM provider'larini ayni interface arkasina bagla.
+4. Manuel AES-128 tek blok deneyini test vektorleriyle dogrula.
+5. Her yontem icin 10-15 olcum yapip JSON/CSV yaz.
+6. CLI use-case'lerini degistirmeden Electron UI ekle.
 
 ## Etik kullanim
 

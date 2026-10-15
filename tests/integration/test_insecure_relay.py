@@ -134,3 +134,50 @@ def test_insecure_pdf_is_saved_and_relayed(tmp_path) -> None:
         if client_b is not None:
             client_b.close()
         relay.stop()
+
+
+def test_client_pdf_transfer_rebuilds_file_on_receiver(tmp_path) -> None:
+    received_directory = tmp_path / "server-received"
+    download_directory = tmp_path / "client-b-downloads"
+    relay = RelayServer("127.0.0.1", 0, 1024 * 1024, 257, received_directory)
+    relay.start()
+    settings = {
+        "node": {
+            "server_host": "127.0.0.1",
+            "server_port": relay.port,
+        },
+        "transfer": {
+            "max_file_size_bytes": 1024 * 1024,
+            "chunk_size_bytes": 257,
+        },
+    }
+    settings_a = {**settings, "node": {**settings["node"], "client_id": "client-a"}}
+    settings_b = {**settings, "node": {**settings["node"], "client_id": "client-b"}}
+    client_a = Client(settings_a, "insecure", str(tmp_path / "client-a-downloads"))
+    client_b = Client(settings_b, "insecure", str(download_directory))
+    source_pdf = tmp_path / "sample.pdf"
+    expected_content = b"%PDF-1.4\n" + bytes(range(256)) * 20 + b"\n%%EOF"
+    source_pdf.write_bytes(expected_content)
+
+    try:
+        client_a.connect()
+        client_b.connect()
+        client_a.send_pdf(source_pdf)
+
+        deadline = time.monotonic() + 3
+        downloaded_files = []
+        while time.monotonic() < deadline:
+            downloaded_files = list(download_directory.glob("*_sample.pdf"))
+            if downloaded_files and downloaded_files[0].stat().st_size == len(expected_content):
+                break
+            time.sleep(0.01)
+
+        server_files = list(received_directory.glob("*_sample.pdf"))
+        assert len(downloaded_files) == 1
+        assert len(server_files) == 1
+        assert downloaded_files[0].read_bytes() == expected_content
+        assert server_files[0].read_bytes() == expected_content
+    finally:
+        client_a.close()
+        client_b.close()
+        relay.stop()

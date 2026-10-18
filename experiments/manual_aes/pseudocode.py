@@ -11,7 +11,7 @@ def encrypt_block(block_16_bytes, key_16_bytes):
         list(block_16_bytes[3:16:4]),  # [b3, b7, b11, b15]
     ]
     
-    words = [key_16_bytes[i:i+4] for i in range(0, len(key_16_bytes), 4)]
+    words = [key_16_bytes[i:i+4] for i in range(0, len(key_16_bytes), 4)]   #baktik valla ai dan yapmasina yparim da cok ugrastirir bos yere yani gerek yok
     
     temp=[]
 

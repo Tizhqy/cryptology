@@ -395,3 +395,170 @@ def decrypt_block(ciphertext_16_bytes: bytes, key_16_bytes: bytes, verbose: bool
     return state_to_bytes(state)
 
 
+# ---------------------------------------------------------------------------
+# 8. PKCS#7 DOLGULAMA (PADDING & UNPADDING)
+# ---------------------------------------------------------------------------
+def pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
+    """
+    PKCS#7 standardına göre veriyi blok boyutunun (16 bayt) katı yapar.
+    Eğer veri zaten 16'nın katıysa, deşifrelemede belirsizliği önlemek için
+    tam bir blok (16 adet 0x10) dolgu eklenir.
+    """
+    pad_len = block_size - (len(data) % block_size)
+    padding = bytes([pad_len] * pad_len)
+    return data + padding
+
+
+def pkcs7_unpad(data: bytes, block_size: int = 16) -> bytes:
+    """
+    PKCS#7 dolgusunu doğrular ve temizler.
+    Hatalı dolgu baytları tespit edilirse ValueError fırlatır (Padding Oracle koruması).
+    """
+    if not data or len(data) % block_size != 0:
+        raise ValueError("Geçersiz veri boyutu: Blok boyutu 16'nın katı olmalıdır!")
+
+    pad_len = data[-1]
+    if pad_len < 1 or pad_len > block_size:
+        raise ValueError(f"Geçersiz PKCS#7 dolgu boyutu: {pad_len}")
+
+    # Son pad_len baytın tamamı pad_len değerinde olmalıdır
+    for b in data[-pad_len:]:
+        if b != pad_len:
+            raise ValueError("Bozuk PKCS#7 dolgusu tespit edildi!")
+
+    return data[:-pad_len]
+
+
+# ---------------------------------------------------------------------------
+# 9. ÇALIŞMA MODLARI: ECB VE CBC (IV DESTEKLİ)
+# ---------------------------------------------------------------------------
+def encrypt_ecb(plaintext: bytes, key: bytes, pad: bool = True) -> bytes:
+    """
+    ECB (Electronic Codebook) Modu:
+    Her blok birbirinden bağımsız şifrelenir.
+    NOT: Aynı düz metin blokları aynı şifreli blokları üretir (desen sızdırır).
+    """
+    data = pkcs7_pad(plaintext) if pad else plaintext
+    if len(data) % 16 != 0:
+        raise ValueError("Veri boyutu 16'nın katı olmalıdır (veya pad=True verilmeli).")
+
+    ciphertext = bytearray()
+    for i in range(0, len(data), 16):
+        block = data[i:i + 16]
+        ciphertext.extend(encrypt_block(block, key))
+    return bytes(ciphertext)
+
+
+def decrypt_ecb(ciphertext: bytes, key: bytes, unpad: bool = True) -> bytes:
+    """ECB Modu Deşifreleme."""
+    if len(ciphertext) % 16 != 0:
+        raise ValueError("Şifreli metin boyutu 16'nın katı olmalıdır.")
+
+    plaintext = bytearray()
+    for i in range(0, len(ciphertext), 16):
+        block = ciphertext[i:i + 16]
+        plaintext.extend(decrypt_block(block, key))
+
+    return pkcs7_unpad(bytes(plaintext)) if unpad else bytes(plaintext)
+
+
+def encrypt_cbc(plaintext: bytes, key: bytes, iv: bytes, pad: bool = True) -> bytes:
+    """
+    CBC (Cipher Block Chaining) Modu:
+    Her düz metin bloğu şifrelenmeden önce bir önceki şifreli blokla (ilk blok ise IV ile) XOR'lanır:
+      C_0 = Encrypt(P_0 ^ IV)
+      C_i = Encrypt(P_i ^ C_{i-1})
+    Bu sayede aynı düz metinler her seferinde tamamen farklı şifreli metinler üretir.
+    """
+    if len(iv) != 16:
+        raise ValueError(f"CBC modu için IV tam 16 bayt olmalıdır! Alınan: {len(iv)}")
+
+    data = pkcs7_pad(plaintext) if pad else plaintext
+    ciphertext = bytearray()
+    prev_block = iv
+
+    for i in range(0, len(data), 16):
+        block = data[i:i + 16]
+        # P_i ^ prev_block
+        xored = bytes(b ^ p for b, p in zip(block, prev_block))
+        enc_block = encrypt_block(xored, key)
+        ciphertext.extend(enc_block)
+        prev_block = enc_block
+
+    return bytes(ciphertext)
+
+
+def decrypt_cbc(ciphertext: bytes, key: bytes, iv: bytes, unpad: bool = True) -> bytes:
+    """
+    CBC Modu Deşifreleme:
+      P_0 = Decrypt(C_0) ^ IV
+      P_i = Decrypt(C_i) ^ C_{i-1}
+    """
+    if len(iv) != 16:
+        raise ValueError(f"CBC modu için IV tam 16 bayt olmalıdır! Alınan: {len(iv)}")
+    if len(ciphertext) % 16 != 0:
+        raise ValueError("Şifreli metin boyutu 16'nın katı olmalıdır.")
+
+    plaintext = bytearray()
+    prev_block = iv
+
+    for i in range(0, len(ciphertext), 16):
+        block = ciphertext[i:i + 16]
+        dec_block = decrypt_block(block, key)
+        # Decrypt(C_i) ^ prev_block
+        pt_block = bytes(d ^ p for d, p in zip(dec_block, prev_block))
+        plaintext.extend(pt_block)
+        prev_block = block
+
+    return pkcs7_unpad(bytes(plaintext)) if unpad else bytes(plaintext)
+
+
+# ---------------------------------------------------------------------------
+# 10. NESNE YÖNELİMLİ SARMALAYICI SINIF (ManualAES128)
+# ---------------------------------------------------------------------------
+class ManualAES128:
+    """
+    Yusuf Tan Durmuş tarafından yazılmış saf Python AES-128 sınıfı.
+    Tek blok, ECB ve CBC modlarını kolay ve güvenli bir arayüzle sunar.
+    """
+
+    def __init__(self, key: bytes):
+        if len(key) != 16:
+            raise ValueError(f"AES-128 anahtarı tam 16 bayt (128 bit) olmalıdır. Alınan: {len(key)}")
+        self.key = key
+
+    def encrypt_block(self, block: bytes, verbose: bool = False) -> bytes:
+        return encrypt_block(block, self.key, verbose=verbose)
+
+    def decrypt_block(self, block: bytes, verbose: bool = False) -> bytes:
+        return decrypt_block(block, self.key, verbose=verbose)
+
+    def encrypt(self, data: bytes, mode: str = "CBC", iv: bytes | None = None) -> Tuple[bytes, bytes | None]:
+        """
+        Metin veya dosyayı şifreler.
+        CBC modunda IV verilmezse rastgele 16 baytlık güvenli IV üretilir.
+        Döndürür: (ciphertext, iv)
+        """
+        mode = mode.upper()
+        if mode == "ECB":
+            return encrypt_ecb(data, self.key, pad=True), None
+        elif mode == "CBC":
+            if iv is None:
+                iv = os.urandom(16)
+            return encrypt_cbc(data, self.key, iv, pad=True), iv
+        else:
+            raise ValueError(f"Desteklenmeyen mod: {mode}. 'ECB' veya 'CBC' seçiniz.")
+
+    def decrypt(self, ciphertext: bytes, mode: str = "CBC", iv: bytes | None = None) -> bytes:
+        """Şifreli metni çözer."""
+        mode = mode.upper()
+        if mode == "ECB":
+            return decrypt_ecb(ciphertext, self.key, unpad=True)
+        elif mode == "CBC":
+            if iv is None:
+                raise ValueError("CBC modu deşifrelemesi için IV zorunludur!")
+            return decrypt_cbc(ciphertext, self.key, iv, unpad=True)
+        else:
+            raise ValueError(f"Desteklenmeyen mod: {mode}. 'ECB' veya 'CBC' seçiniz.")
+
+

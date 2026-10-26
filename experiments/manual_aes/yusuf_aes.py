@@ -317,3 +317,81 @@ def key_expansion(key_16_bytes: bytes) -> List[List[List[int]]]:
 
     return round_keys
 
+
+# ---------------------------------------------------------------------------
+# 7. TEK BLOK (16-BYTE) ŞİFRELEME VE DEŞİFRELEME
+# ---------------------------------------------------------------------------
+def encrypt_block(block_16_bytes: bytes, key_16_bytes: bytes, verbose: bool = False) -> bytes:
+    """
+    AES-128 tek 16 baytlık blok şifrelemesi.
+    Akış:
+      - Ön Tur (Round 0): AddRoundKey
+      - Turlar 1-9: SubBytes -> ShiftRows -> MixColumns -> AddRoundKey
+      - Son Tur (Round 10): SubBytes -> ShiftRows -> AddRoundKey (MixColumns YOK!)
+    """
+    if len(block_16_bytes) != 16:
+        raise ValueError(f"Blok boyutu 16 bayt olmalıdır! Alınan: {len(block_16_bytes)}")
+
+    state = bytes_to_state(block_16_bytes)
+    round_keys = key_expansion(key_16_bytes)
+
+    if verbose:
+        print(f"--- [ROUND 0] Başlangıç State ---\n{format_state_hex(state)}")
+
+    # Round 0: Giriş Beyazlatma (Pre-whitening)
+    add_round_key(state, round_keys[0])
+
+    # Round 1 - 9: Standart Turlar
+    for r in range(1, 10):
+        sub_bytes(state)
+        shift_rows(state)
+        mix_columns(state)
+        add_round_key(state, round_keys[r])
+        if verbose and (r == 1 or r == 9):
+            print(f"--- [ROUND {r}] Çıkış State ---\n{format_state_hex(state)}")
+
+    # Round 10: Son Tur (MixColumns uygulanmaz!)
+    sub_bytes(state)
+    shift_rows(state)
+    add_round_key(state, round_keys[10])
+
+    if verbose:
+        print(f"--- [ROUND 10 - FINAL] Son State ---\n{format_state_hex(state)}")
+
+    return state_to_bytes(state)
+
+
+def decrypt_block(ciphertext_16_bytes: bytes, key_16_bytes: bytes, verbose: bool = False) -> bytes:
+    """
+    AES-128 tek 16 baytlık blok deşifrelemesi (Ters Şifre).
+    Akış (Ters Sıra):
+      - Başlangıç: AddRoundKey(Round 10 Key)
+      - Turlar 9-1: InvShiftRows -> InvSubBytes -> AddRoundKey -> InvMixColumns
+      - Son Adım (Round 0 Key): InvShiftRows -> InvSubBytes -> AddRoundKey(Round 0 Key)
+    """
+    if len(ciphertext_16_bytes) != 16:
+        raise ValueError(f"Şifreli blok boyutu 16 bayt olmalıdır! Alınan: {len(ciphertext_16_bytes)}")
+
+    state = bytes_to_state(ciphertext_16_bytes)
+    round_keys = key_expansion(key_16_bytes)
+
+    # Başlangıç: Son turun anahtarı eklenir
+    add_round_key(state, round_keys[10])
+
+    # Tur 9'dan 1'e doğru geri sarılır
+    for r in range(9, 0, -1):
+        inv_shift_rows(state)
+        inv_sub_bytes(state)
+        add_round_key(state, round_keys[r])
+        inv_mix_columns(state)
+        if verbose and (r == 9 or r == 1):
+            print(f"--- [INV ROUND {r}] Çıkış State ---\n{format_state_hex(state)}")
+
+    # Tur 0 (Final): InvMixColumns uygulanmaz
+    inv_shift_rows(state)
+    inv_sub_bytes(state)
+    add_round_key(state, round_keys[0])
+
+    return state_to_bytes(state)
+
+

@@ -1,3 +1,4 @@
 # The insecure TCP milestone uses only the Python standard library.
-# pytest is needed only to run the test suite.
+# pytest is needed to run the test suite; cryptography is used for library comparison.
 pytest>=8.0,<9.0
+cryptography>=42.0.0

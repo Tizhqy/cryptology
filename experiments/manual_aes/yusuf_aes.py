@@ -562,3 +562,188 @@ class ManualAES128:
             raise ValueError(f"Desteklenmeyen mod: {mode}. 'ECB' veya 'CBC' seçiniz.")
 
 
+# ---------------------------------------------------------------------------
+# 11. NIST FIPS-197 VE KÜTÜPHANELİ KARŞILAŞTIRMA TESTLERİ
+# ---------------------------------------------------------------------------
+def run_nist_fips197_tests() -> bool:
+    """
+    NIST FIPS-197 resmi test vektörleri ile tek blok şifreleme ve deşifreleme doğrulaması.
+    """
+    print("\n" + "=" * 70)
+    print("1. NIST FIPS-197 RESMİ TEST VEKTÖRLERİ DOĞRULAMASI")
+    print("=" * 70)
+
+    # Test Vektörü 1 (FIPS-197 Ek B)
+    key_b = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+    pt_b = bytes.fromhex("00112233445566778899aabbccddeeff")
+    expected_ct_b = bytes.fromhex("69c4e0d86a7b0430d8cdb78070b4c55a")
+
+    ct_b = encrypt_block(pt_b, key_b)
+    dec_b = decrypt_block(ct_b, key_b)
+
+    print(f"[Vektör 1 - Ek B] Düz Metin : {pt_b.hex()}")
+    print(f"[Vektör 1 - Ek B] Anahtar    : {key_b.hex()}")
+    print(f"[Vektör 1 - Ek B] Manuel CT  : {ct_b.hex()}")
+    print(f"[Vektör 1 - Ek B] Beklenen   : {expected_ct_b.hex()}")
+    assert ct_b == expected_ct_b, "HATA: Vektör 1 şifrelemesi başarısız!"
+    assert dec_b == pt_b, "HATA: Vektör 1 deşifrelemesi başarısız!"
+    print("  -> [BAŞARILI] Vektör 1 şifreleme ve deşifreleme NIST ile %100 eşleşti.")
+
+    # Test Vektörü 2 (FIPS-197 Ek C.1)
+    key_c = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+    pt_c = bytes.fromhex("3243f6a8885a308d313198a2e0370734")
+    expected_ct_c = bytes.fromhex("3925841d02dc09fbdc118597196a0b32")
+
+    ct_c = encrypt_block(pt_c, key_c)
+    dec_c = decrypt_block(ct_c, key_c)
+
+    print(f"\n[Vektör 2 - Ek C.1] Düz Metin : {pt_c.hex()}")
+    print(f"[Vektör 2 - Ek C.1] Anahtar    : {key_c.hex()}")
+    print(f"[Vektör 2 - Ek C.1] Manuel CT  : {ct_c.hex()}")
+    print(f"[Vektör 2 - Ek C.1] Beklenen   : {expected_ct_c.hex()}")
+    assert ct_c == expected_ct_c, "HATA: Vektör 2 şifrelemesi başarısız!"
+    assert dec_c == pt_c, "HATA: Vektör 2 deşifrelemesi başarısız!"
+    print("  -> [BAŞARILI] Vektör 2 şifreleme ve deşifreleme NIST ile %100 eşleşti.")
+
+    return True
+
+
+def compare_with_cryptography_library() -> bool:
+    """
+    Manuel AES'i endüstri standardı 'cryptography' kütüphanesi ile karşılaştırır.
+    ECB ve CBC modlarında hem şifreli çıktı hem de çözülen metin test edilir.
+    """
+    print("\n" + "=" * 70)
+    print("2. KÜTÜPHANE (cryptography) İLE BİREBİR KARŞILAŞTIRMA TESTİ")
+    print("=" * 70)
+
+    try:
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        from cryptography.hazmat.backends import default_backend
+    except ImportError:
+        print("[UYARI] 'cryptography' paketi yüklü değil. 'pip install cryptography' yapabilirsiniz.")
+        return False
+
+    key = bytes.fromhex("a01b2c3d4e5f60718293a4b5c6d7e8f9")
+    iv = bytes.fromhex("102030405060708090a0b0c0d0e0f001")
+    plaintext = "KTÜ Of Teknoloji Fakültesi Güvenli Haberleşme AES-128 Manuel Deneyi!".encode("utf-8")
+
+    padded_plaintext = pkcs7_pad(plaintext)
+
+    # --- ECB Modu Karşılaştırması ---
+    manual_ecb = encrypt_ecb(plaintext, key, pad=True)
+    cipher_lib_ecb = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+    enc_lib_ecb = cipher_lib_ecb.encryptor()
+    lib_ecb = enc_lib_ecb.update(padded_plaintext) + enc_lib_ecb.finalize()
+
+    print("[ECB Modu]")
+    print(f"  Manuel Çıktı  : {manual_ecb.hex()[:48]}... (uzunluk: {len(manual_ecb)} bayt)")
+    print(f"  Kütüphane     : {lib_ecb.hex()[:48]}... (uzunluk: {len(lib_ecb)} bayt)")
+    assert manual_ecb == lib_ecb, "HATA: ECB modu kütüphane çıktısıyla uyuşmuyor!"
+    print("  -> [OK] ECB modu kütüphane ile BİREBİR AYNI.")
+
+    # --- CBC Modu Karşılaştırması ---
+    manual_cbc = encrypt_cbc(plaintext, key, iv, pad=True)
+    cipher_lib_cbc = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    enc_lib_cbc = cipher_lib_cbc.encryptor()
+    lib_cbc = enc_lib_cbc.update(padded_plaintext) + enc_lib_cbc.finalize()
+
+    print("\n[CBC Modu + IV]")
+    print(f"  IV            : {iv.hex()}")
+    print(f"  Manuel Çıktı  : {manual_cbc.hex()[:48]}... (uzunluk: {len(manual_cbc)} bayt)")
+    print(f"  Kütüphane     : {lib_cbc.hex()[:48]}... (uzunluk: {len(lib_cbc)} bayt)")
+    assert manual_cbc == lib_cbc, "HATA: CBC modu kütüphane çıktısıyla uyuşmuyor!"
+    print("  -> [OK] CBC modu kütüphane ile BİREBİR AYNI.")
+
+    # Deşifreleme doğrulaması
+    dec_manual = decrypt_cbc(manual_cbc, key, iv, unpad=True)
+    assert dec_manual == plaintext, "HATA: Manuel CBC deşifrelemesi asıl metni vermedi!"
+    print(f"  -> [OK] Çözülen metin: '{dec_manual.decode('utf-8')}'")
+
+    return True
+
+
+def run_performance_benchmark(iterations: int = 2000) -> None:
+    """
+    Manuel AES (saf Python) ile Kütüphaneli AES (C / AES-NI donanım hızlandırma)
+    arasındaki hız ve verimlilik farkını ölçer. Proje raporunun 5. maddesi için veri üretir.
+    """
+    print("\n" + "=" * 70)
+    print(f"3. PERFORMANS / BENCHMARK ÖLÇÜMÜ ({iterations:,} Blok Şifreleme)")
+    print("=" * 70)
+
+    try:
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        from cryptography.hazmat.backends import default_backend
+        has_lib = True
+    except ImportError:
+        has_lib = False
+
+    block = bytes.fromhex("00112233445566778899aabbccddeeff")
+    key = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
+
+    # Manuel AES Ölçümü
+    t0 = time.perf_counter()
+    for _ in range(iterations):
+        encrypt_block(block, key)
+    t_manual = time.perf_counter() - t0
+
+    print(f"Manuel AES (Saf Python)       : {t_manual:.4f} saniye")
+    print(f"  -> Blok başına ortalama     : {(t_manual / iterations) * 1000:.4f} ms")
+    bytes_total = iterations * 16
+    print(f"  -> Veri Akış Hızı (Throughput): {(bytes_total / t_manual) / (1024 * 1024):.2f} MB/s")
+
+    if has_lib:
+        cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+        t0 = time.perf_counter()
+        for _ in range(iterations):
+            enc = cipher.encryptor()
+            _ = enc.update(block) + enc.finalize()
+        t_lib = time.perf_counter() - t0
+
+        print(f"\nKütüphane AES (C / AES-NI)    : {t_lib:.4f} saniye")
+        print(f"  -> Blok başına ortalama     : {(t_lib / iterations) * 1000:.4f} ms")
+        print(f"  -> Veri Akış Hızı (Throughput): {(bytes_total / t_lib) / (1024 * 1024):.2f} MB/s")
+
+        ratio = t_manual / t_lib if t_lib > 0 else 0
+        print("-" * 70)
+        print(f"SONUÇ: Kütüphane yaklaşık {ratio:.1f} kat daha hızlıdır.")
+        print("RAPOR NOTU (Bölüm 5):")
+        print("  1. Saf Python kodu yorumlayıcı (bytecode VM) üzerinde dinamik tip kontrolüyle çalışır.")
+        print("  2. Kütüphaneli versiyon (OpenSSL / cryptography), modern işlemcilerin donanımsal")
+        print("     AES talimat setini (AES-NI: aesenc, aesenclast) doğrudan assembly düzeyinde çalıştırır.")
+        print("  3. Bu nedenle üretim güvenliğinde (production) kütüphaneli AES-128-GCM tercih edilir;")
+        print("     manuel AES ise eğitim, algoritma adımlarını kavrama ve doğrulama amaçlıdır.")
+
+
+# ---------------------------------------------------------------------------
+# 12. ETKİLEŞİMLİ VE GÖRSEL ÇALIŞTIRMA
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    print("""
+    #####################################################################
+    #          KARADENİZ TEKNİK ÜNİVERSİTESİ - OF TEKNOLOJİ FAKÜLTESİ    #
+    #          YAZILIM MÜHENDİSLİĞİ - GÜVENLİ HABERLEŞME PROJESİ         #
+    #                 KÜTÜPHANESİZ MANUEL AES-128 MODÜLÜ                #
+    #                 Geliştirici: Yusuf Tan DURMUŞ (445841)            #
+    #####################################################################
+    """)
+
+    # 1. NIST Test Vektörleri
+    run_nist_fips197_tests()
+
+    # 2. Adım Adım Round İçi Durum (State) İncelemesi (Rapor için örnek çıktı)
+    print("\n" + "=" * 70)
+    print("ÖĞRETİCİ GÖSTERİM: TEK BLOK İÇİN ADIM ADIM ROUND STATE İNCELEMESİ")
+    print("=" * 70)
+    sample_key = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+    sample_pt = bytes.fromhex("3243f6a8885a308d313198a2e0370734")
+    encrypt_block(sample_pt, sample_key, verbose=True)
+
+    # 3. Kütüphane Karşılaştırması
+    compare_with_cryptography_library()
+
+    # 4. Performans Ölçümü
+    run_performance_benchmark(iterations=2000)
+
+    print("\n[OK] TÜM MANUEL AES TESTLERİ VE DOĞRULAMALAR EKSİKSİZ TAMAMLANDI.")

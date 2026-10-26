@@ -15,6 +15,9 @@ Deney kodu, uretim uygulamasinda kullanilacak kriptografik uygulamanin yerine ge
 ## Odev deneyleri
 
 - `manual_aes`: AES-128 round, S-box, ShiftRows, MixColumns ve key expansion.
+  - Manuel AES uygulaması: [`experiments/manual_aes/yusuf_aes.py`](manual_aes/yusuf_aes.py)
+  - Manuel AES teknik raporu ve analizi: [`experiments/manual_aes/MANUEL_AES_RAPORU.md`](manual_aes/MANUEL_AES_RAPORU.md)
+  - Otomatik doğrulama testleri: [`tests/experiments/test_manual_aes.py`](../tests/experiments/test_manual_aes.py)
 - `benchmarks`: RSA, DH, ECDH ve ML-KEM icin 10-15 tekrarli olcum.
 - `library_aes`: Kutuphaneli AES-128-GCM davranisi ve nonce/tag notlari.
 

@@ -1,6 +1,17 @@
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
+"""
+AES blogu her zaman 16 bayttir; anahtar 16/24/32 bayt olabilir.
+Akis: anahtar genisletme, baslangic AddRoundKey, normal turlar ve MixColumns'suz son tur.
+Bu dosyadaki ECB kullanimi yalnizca tek blokluk kutuphane karsilastirmasi icindir.
+"""
+
 import time
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+BLOCK_SIZE_BYTES = 16
+KEY_SIZE_BYTES = {128: 16, 192: 24, 256: 32}
+KEY_SIZE_BITS_BY_BYTES = {byte_count: bit_count for bit_count, byte_count in KEY_SIZE_BYTES.items()}
 
 S_BOX = [
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
@@ -22,20 +33,25 @@ S_BOX = [
 ]
 
 def sub_bytes(state):
+    """State'teki her bayti S-Box tablosundaki dogrusal olmayan degeriyle degistirir."""
     for r in range(4):
         for c in range(4):
-            state[r][c] = S_BOX[state[r][c]]    #ornegin baytin degeri 53 iste sbox da 5.satir  3. sutun
+            # Ornek: S_BOX[0x53], tablonun 5. satir 3. sutunundaki 0xED degeridir.
+            state[r][c] = S_BOX[state[r][c]]
             
 def shift_rows(state):
+    """State satirlarini sola 0, 1, 2 ve 3 bayt kaydirarak konumlari karistirir."""
     state[0] = state[0]
     state[1] = state[1][1:] + state[1][:1]
     state[2] = state[2][2:] + state[2][:2]
     state[3] = state[3][3:] + state[3][:3]
 
 def xtime(a):
+    """GF(2^8) alaninda bir bayti 2 ile carpar; tasma varsa 0x1B ile indirger."""
     return ((a << 1) ^ 0x1B) & 0xFF if (a & 0x80) else (a << 1) & 0xFF
 
 def mix_columns(state):
+    """Her state sutununu AES sabit matrisiyle GF(2^8) icinde karistirir."""
     for c in range(4):
         s0, s1, s2, s3 = state[0][c], state[1][c], state[2][c], state[3][c]
         state[0][c] = xtime(s0) ^ (xtime(s1) ^ s1) ^ s2 ^ s3
@@ -44,148 +60,159 @@ def mix_columns(state):
         state[3][c] = (xtime(s0) ^ s0) ^ s1 ^ s2 ^ xtime(s3)
 
 def add_round_key(state, round_key_matrix):
+    """State'in her baytini bu turun anahtarindaki karsiligiyla XOR'lar."""
     for r in range(4):
         for c in range(4):
             state[r][c] ^= round_key_matrix[r][c]
 
 RCON = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36]
 
-def key_expansion(key_bytes):
-    w = [list(key_bytes[i:i+4]) for i in range(0, 16, 4)]     # 4 er baytlik 4 kelimeye boluyoz
-    
-    for i in range(4, 44):
-        temp = list(w[i - 1])
-        if i % 4 == 0:
-            temp = temp[1:] + temp[:1]  #sola kaydir
-            temp = [S_BOX[b] for b in temp] #sboxa sok
-            temp[0] ^= RCON[i // 4]
+def _resolve_key_size(key_bytes, key_size_bits=None):
+    """Anahtar bayt sayisindan AES boyutunu bulur ve istege bagli boyutu dogrular."""
+    detected_size = KEY_SIZE_BITS_BY_BYTES.get(len(key_bytes))
+    if detected_size is None:
+        raise ValueError("AES key must be exactly 16, 24, or 32 bytes.")
+    if key_size_bits is not None:
+        if key_size_bits not in KEY_SIZE_BYTES:
+            raise ValueError("AES key size must be 128, 192, or 256 bits.")
+        if key_size_bits != detected_size:
+            raise ValueError("AES key size does not match the key byte length.")
+    return detected_size
 
-        w.append([w[i - 4][j] ^ temp[j] for j in range(4)])
-    
-    round_keys = []         # 44 kelimeyi 11 adet 4x4 sütun matrisine çevir
-    for r in range(11):
-        round_words = w[r*4:(r+1)*4]            # 4 sütun kelimesi
-        matrix = [[round_words[c][row] for c in range(4)] for row in range(4)]   # State formatına uygun: satır x sütun
+
+def key_expansion(key_bytes):
+    """Anahtardan Nr+1 round anahtari uretir; AES-256'nin ek SubWord adimini da uygular."""
+    key_size_bits = _resolve_key_size(key_bytes)
+    words_per_key = key_size_bits // 32  # Nk: anahtardaki 32 bitlik kelime sayısı.
+    round_count = words_per_key + 6  # AES standardında Nr = Nk + 6.
+    word_count = 4 * (round_count + 1)
+    words = [list(key_bytes[i:i + 4]) for i in range(0, len(key_bytes), 4)]
+
+    for i in range(words_per_key, word_count):
+        temp = list(words[i - 1])
+        if i % words_per_key == 0:
+            # Her Nk kelimede RotWord, SubWord ve Rcon uygulanır.
+            temp = temp[1:] + temp[:1]
+            temp = [S_BOX[byte] for byte in temp]
+            temp[0] ^= RCON[i // words_per_key]
+        elif words_per_key == 8 and i % words_per_key == 4:
+            # AES-256'da her anahtar grubunun ortasında ek SubWord uygulanır.
+            temp = [S_BOX[byte] for byte in temp]
+
+        words.append([words[i - words_per_key][j] ^ temp[j] for j in range(4)])
+
+    round_keys = []
+    for round_index in range(round_count + 1):
+        round_words = words[round_index * 4:(round_index + 1) * 4]
+        matrix = [[round_words[column][row] for column in range(4)] for row in range(4)]
         round_keys.append(matrix)
     return round_keys
 
-def encrypt_block(block_16_bytes, key_16_bytes, mode=128):
+
+def encrypt_block(block_16_bytes, key_bytes, key_size_bits=None):
+    """Tek 16 baytlik blogu sifreler; padding yapmaz ve 16/24/32 bayt anahtar kabul eder."""
+    if len(block_16_bytes) != BLOCK_SIZE_BYTES:
+        raise ValueError("AES block must be exactly 16 bytes.")
+    _resolve_key_size(key_bytes, key_size_bits)
+
+    # 16 bayt, AES state matrisine sütun sütun yerleştirilir.
     state = [
-        list(block_16_bytes[0:16:4]),
-        list(block_16_bytes[1:16:4]),
-        list(block_16_bytes[2:16:4]),
-        list(block_16_bytes[3:16:4]),
+        list(block_16_bytes[0::4]),
+        list(block_16_bytes[1::4]),
+        list(block_16_bytes[2::4]),
+        list(block_16_bytes[3::4]),
     ]
-    #mod ekeleme oalcak 128 192 256 icin
-    
-    round_keys = key_expansion(key_16_bytes)
+    round_keys = key_expansion(key_bytes)
     add_round_key(state, round_keys[0])
 
-    for round_num in range(1, 10):  #1-9
+    round_count = len(round_keys) - 1
+    for round_num in range(1, round_count):
         sub_bytes(state)
         shift_rows(state)
         mix_columns(state)
         add_round_key(state, round_keys[round_num])
-        
-    sub_bytes(state)    #son turda mixcolumns yok
+
+    # AES omits MixColumns in the final round.
+    sub_bytes(state)
     shift_rows(state)
-    add_round_key(state, round_keys[10])
-    
-    output = bytearray(16)      # State matrisini tekrar düz 16 bayta çevir (sütun öncelikli)
+    add_round_key(state, round_keys[round_count])
+
+    output = bytearray(BLOCK_SIZE_BYTES)
     idx = 0
     for c in range(4):
         for r in range(4):
             output[idx] = state[r][c]
             idx += 1
-            
+
     return bytes(output)
 
-def library_aes_encrypt(block_16_bytes, key_16_bytes):
-    cipher = Cipher(algorithms.AES(key_16_bytes), modes.ECB(), backend=default_backend())
+
+def library_aes_encrypt(block_16_bytes, key_bytes, key_size_bits=None):
+    """Tek blokluk test icin cryptography kutuphanesiyle AES-ECB sifrelemesi yapar."""
+    if len(block_16_bytes) != BLOCK_SIZE_BYTES:
+        raise ValueError("AES block must be exactly 16 bytes.")
+    _resolve_key_size(key_bytes, key_size_bits)
+    # ECB yalnızca tek blokluk manuel AES karşılaştırması için kullanılır.
+    cipher = Cipher(algorithms.AES(key_bytes), modes.ECB(), backend=default_backend())
     encryptor = cipher.encryptor()
     return encryptor.update(block_16_bytes) + encryptor.finalize()
 
-def compare_with_library(block, key):
-    manual_result = encrypt_block(block, key)
-    library_result = library_aes_encrypt(block, key)
-    
+
+def compare_with_library(block, key, key_size_bits=None):
+    """Manuel ve kutuphane sonuclarini yazdirip esit olduklarini kontrol eder."""
+    manual_result = encrypt_block(block, key, key_size_bits)
+    library_result = library_aes_encrypt(block, key, key_size_bits)
+
     print("Manuel Sonuc :", manual_result.hex())
     print("Kutuphane    :", library_result.hex())
-    
+
     assert manual_result == library_result, "HATA: Sonuclar uyusmuyor!"
     print("BASARILI: Kendi implementasyonun kütüphaneyle birebir ayni calisiyor.")
-    
-
-plain_block = bytes.fromhex("00112233445566778899aabbccddeeff")
-secret_key  = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
-expected    = bytes.fromhex("69c4e0d86a7b0430d8cdb78070b4c55a")
-
-print("=== 1. DOĞRULUK TESTİ ===")
-my_cipher = encrypt_block(plain_block, secret_key)
-lib_cipher = library_aes_encrypt(plain_block, secret_key)
-
-print(f"Girdi (Plaintext) : {plain_block.hex()}")
-print(f"Anahtar (Key)     : {secret_key.hex()}")
-print("-" * 50)
-print(f"Manuel AES Çıktı  : {my_cipher.hex()}")
-print(f"Kütüphane Çıktı   : {lib_cipher.hex()}")
-print(f"NIST Beklenen     : {expected.hex()}")
-
-# Karşılaştırma doğrulaması
-assert my_cipher == lib_cipher, "HATA: Kod kütüphane ile uyuşmuyor!"
-assert my_cipher == expected, "HATA: Kod NIST standardı ile uyuşmuyor!"
-print("\n[✓] TEST BAŞARILI: Manuel AES kütüphane ve NIST standardı ile birebir aynı üretti.\n")
-
-# -------------------------------------------------------------------------
-# 4. HIZ (PERFORMANS / BENCHMARK) KARŞILAŞTIRMASI
-# -------------------------------------------------------------------------
-print("=== 2. HIZ KARŞILAŞTIRMASI (10.000 Blok Şifreleme) ===")
-ITERATIONS = 10_000
-
-# Manuel AES Süresi
-start = time.perf_counter()
-for _ in range(ITERATIONS):
-    encrypt_block(plain_block, secret_key)
-manual_duration = time.perf_counter() - start
-
-# Kütüphane Süresi (Cipher nesnesini loop dışında tutarak sadece şifreleme süresi ölçülür)
-cipher = Cipher(algorithms.AES(secret_key), modes.ECB(), backend=default_backend())
-start = time.perf_counter()
-for _ in range(ITERATIONS):
-    encryptor = cipher.encryptor()
-    _ = encryptor.update(plain_block) + encryptor.finalize()
-lib_duration = time.perf_counter() - start
-
-# Hız Sonuçları
-print(f"Manuel AES (Saf Python) : {manual_duration:.4f} saniye")
-print(f"Kütüphane (C / AES-NI)  : {lib_duration:.4f} saniye")
-print(f"Fark                    : Kütüphane yaklaşık {manual_duration / lib_duration:.1f} kat daha hızlı.")
-
-# def encrypt_block(block_16_bytes, key_16_bytes):
-#     # AES-128 hem anahtar hem de block icin 16 byte kullanir.
-#     state = xor_bytes(block_16_bytes, key_16_bytes)
-#     round_keys = expand_key(key_16_bytes)
-
-#     for round_number in range(1, 10):
-#         # SubBytes: her byte'i S-box ile non-linear degistir.
-#         state = sub_bytes(state)
-#         # ShiftRows: state satirlarini farkli miktarlarda kaydir.
-#         state = shift_rows(state)
-#         # MixColumns: her sutundaki byte'lari GF(2^8) icinde karistir.
-#         state = mix_columns(state)
-#         # AddRoundKey: round anahtarini XOR ile ekle.
-#         state = xor_bytes(state, round_keys[round_number])
-
-#     # Son round'da MixColumns uygulanmaz.
-#     state = sub_bytes(state)
-#     state = shift_rows(state)
-#     state = xor_bytes(state, round_keys[10])
-#     return state
 
 
-# def compare_with_library(block, key):
-#     manual_result = encrypt_block(block, key)
-#     library_result = library_aes_ecb_single_block(block, key)
-#     # Iki sonuc ayni olmali; fark varsa round veya key expansion hatasini ara.
-#     assert manual_result == library_result
-#     return manual_result
+TEST_VECTORS = (
+    (128, "000102030405060708090a0b0c0d0e0f", "69c4e0d86a7b0430d8cdb78070b4c55a"),
+    (192, "000102030405060708090a0b0c0d0e0f1011121314151617", "dda97ca4864cdfe06eaf70a0ec0d7191"),
+    (256, "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", "8ea2b7ca516745bfeafc49904b496089"),
+)
+TEST_PLAINTEXT = bytes.fromhex("00112233445566778899aabbccddeeff")
+
+
+def main():
+    """Uc NIST test vektorunu dogrular, sonra manuel/kutuphane hizini karsilastirir."""
+    iterations = 10_000
+
+    # Adim 1: Test vektorundaki hex metinleri gercek baytlara donusturulur.
+    # Adim 2: encrypt_block, 16 bayti AES'in sutun-oncelikli 4x4 state'ine koyar.
+    # Adim 3: key_expansion anahtardan round anahtarlarini uretir; ilk anahtar eklenir.
+    # Adim 4: Her tur SubBytes, ShiftRows, MixColumns ve AddRoundKey uygular.
+    # Adim 5: Son tur MixColumns'u atlar; sonuc NIST ve kutuphane ile karsilastirilir.
+    for key_size_bits, key_hex, expected_hex in TEST_VECTORS:
+        key = bytes.fromhex(key_hex)
+        expected = bytes.fromhex(expected_hex)
+        manual_result = encrypt_block(TEST_PLAINTEXT, key, key_size_bits)
+        library_result = library_aes_encrypt(TEST_PLAINTEXT, key, key_size_bits)
+        assert manual_result == expected
+        assert library_result == expected
+        print(f"AES-{key_size_bits} NIST vektoru: {manual_result.hex()} [OK]")
+
+        start = time.perf_counter()
+        for _ in range(iterations):
+            encrypt_block(TEST_PLAINTEXT, key, key_size_bits)
+        manual_duration = time.perf_counter() - start
+
+        cipher = Cipher(algorithms.AES(key), modes.ECB(), backend=default_backend())
+        start = time.perf_counter()
+        for _ in range(iterations):
+            encryptor = cipher.encryptor()
+            encryptor.update(TEST_PLAINTEXT)
+            encryptor.finalize()
+        library_duration = time.perf_counter() - start
+        print(
+            f"  {iterations} blok: manuel {manual_duration:.4f}s, "
+            f"kutuphane {library_duration:.4f}s"
+        )
+
+
+if __name__ == "__main__":
+    main()

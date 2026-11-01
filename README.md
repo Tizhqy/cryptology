@@ -6,7 +6,7 @@ Proje bir sunucu ve ayni client uygulamasinin iki instance'i ile calisir. Client
 
 ## Durum
 
-Ilk calisan milestone tamamlandi: insecure TCP modunda Client A -> Server -> Client B plaintext mesaj ve PDF aktarimi yapabiliyor. Server plaintext mesaji konsola basar, PDF'yi `received/` altina kaydeder ve Client B'ye aktarir. AES, key exchange, manuel AES ve Electron henuz uygulanmadi.
+Ilk calisan milestone tamamlandi: insecure TCP modunda Client A -> Server -> Client B plaintext mesaj ve PDF aktarimi yapabiliyor. Server plaintext mesaji konsola basar, PDF'yi `received/` altina kaydeder ve Client B'ye aktarir. Manuel AES-128/192/256 deneyi test vektorleriyle dogrulandi. Uygulama akisinda AES-GCM, key exchange ve Electron henuz uygulanmadi.
 
 ## Mimari ilkeler
 

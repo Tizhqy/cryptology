@@ -10,7 +10,7 @@ test = ["pytest>=8.0,<9.0"]
 experiments = ["cryptography>=42.0.0"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = [".", "src"]
 testpaths = ["tests"]
 
 [tool.ruff]

@@ -4,7 +4,9 @@
 | --- | --- | --- |
 | 445841 | Yusuf Tan DURMUŞ | YusufTanDURMUS |
 | 458364 | Mehmet Eren BAYRAKTAR | Tizhqy |
-| 445851 | Ömer Eren HALİLOĞLU |  |
+| 445851 | Ömer Eren HALİLOĞLU | ? |
+
+Yusuf git hesabinda bir yanlislik yapmis ve commitleri yanlis sekilde atmis. merge edilen commitlerde Tizhqy disindaki commitler "Yusuf" bundan sonra YusufTanDurmus hesabiyle commit atmaya devam edecek. İkisi de ayni kisi yani.
 
 # Cryptology Security Lab
 

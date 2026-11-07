@@ -75,6 +75,42 @@ class RSAKeyExchangeServer:
             raise TypeError("Loaded key is not an RSA private key.")
         return cls(private_key=private_key)
 
+    def unwrap_aes_key(self, wrapped_key: bytes, expected_key_sizes: Tuple[int, ...] = (16, 24, 32)) -> bytes:
+        """Unwrap (decrypt) an AES key encrypted with RSA-OAEP SHA-256.
+
+        Args:
+            wrapped_key: The ciphertext bytes received from client.
+            expected_key_sizes: Valid allowed lengths for the recovered key in bytes (default: 16, 24, 32).
+
+        Returns:
+            The recovered plaintext AES key bytes.
+
+        Raises:
+            TypeError: If wrapped_key is not bytes.
+            ValueError: If decryption fails or decrypted key length does not match expected_key_sizes.
+        """
+        if not isinstance(wrapped_key, bytes):
+            raise TypeError("wrapped_key must be bytes.")
+
+        try:
+            recovered_key = self._private_key.decrypt(
+                wrapped_key,
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None,
+                ),
+            )
+        except Exception as exc:
+            raise ValueError(f"Failed to unwrap AES key using RSA-OAEP: {exc}") from exc
+
+        if len(recovered_key) not in expected_key_sizes:
+            raise ValueError(
+                f"Recovered key length {len(recovered_key)} bytes is not in expected sizes: {expected_key_sizes}."
+            )
+
+        return recovered_key
+
 
 class RSAKeyExchangeClient:
     """Client-side handler for wrapping symmetric AES keys using RSA-OAEP with SHA-256."""
